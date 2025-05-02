@@ -1,0 +1,112 @@
+//a Car Rental System implementation using Classes in c++
+#include <iostream>
+#include <vector>
+#include <iomanip> // For better formatting
+
+using namespace std;
+
+class Car {
+public:
+    string brand, model;
+    double pricePerDay;
+    bool isAvailable;
+    string renterName;
+
+    Car(string brand, string model, double price)
+        : brand(brand), model(model), pricePerDay(price), isAvailable(true), renterName("") {}
+
+    void display(int index) const {
+        cout << index << ". " << brand << " " << model 
+             << " - ₹" << pricePerDay << "/day " 
+             << (isAvailable ? "(Available)" : "(Rented by " + renterName + ")") << endl;
+    }
+};
+
+class CarRentalSystem {
+private:
+    vector<Car> cars;
+
+public:
+    void addCar(string brand, string model, double price) {
+        cars.push_back(Car(brand, model, price));
+    }
+
+    void displayAvailableCars() const {
+        cout << "\nAvailable Cars:\n";
+        for (size_t i = 0; i < cars.size(); i++) {
+            if (cars[i].isAvailable) cars[i].display(i + 1);
+        }
+    }
+
+    void rentCar(int carIndex, string renterName, int days) {
+        if (carIndex >= 1 && carIndex <= cars.size() && cars[carIndex - 1].isAvailable) {
+            cars[carIndex - 1].isAvailable = false;
+            cars[carIndex - 1].renterName = renterName;
+            double totalPrice = cars[carIndex - 1].pricePerDay * days;
+            cout << "\nCar Rented Successfully!";
+            cout << "\nInvoice for " << renterName << ":\n"
+                 << "Car: " << cars[carIndex - 1].brand << " " << cars[carIndex - 1].model << endl
+                 << "Days: " << days << " | Rate: ₹" << cars[carIndex - 1].pricePerDay << "/day\n"
+                 << "Total Price: ₹" << fixed << setprecision(2) << totalPrice << endl;
+        } else {
+            cout << "Invalid selection or car is already rented!\n";
+        }
+    }
+
+    void returnCar(int carIndex) {
+        if (carIndex >= 1 && carIndex <= cars.size() && !cars[carIndex - 1].isAvailable) {
+            cout << "\nCar Returned: " << cars[carIndex - 1].brand << " " << cars[carIndex - 1].model << " (Rented by " << cars[carIndex - 1].renterName << ")";
+            cars[carIndex - 1].isAvailable = true;
+            cars[carIndex - 1].renterName = "";
+        } else {
+            cout << "Invalid selection or car was not rented!\n";
+        }
+    }
+};
+
+int main() {
+    CarRentalSystem system;
+    system.addCar("Toyota", "Corolla", 1500);
+    system.addCar("Honda", "Civic", 1700);
+    system.addCar("Ford", "Focus", 1400);
+
+    int choice, carIndex, days;
+    string renterName;
+
+    while (true) {
+        cout << "\nCar Rental System Menu\n";
+        cout << "1. View Available Cars\n";
+        cout << "2. Rent a Car\n";
+        cout << "3. Return a Car\n";
+        cout << "4. Exit\n";
+        cout << "Enter your choice: ";
+        cin >> choice;
+
+        switch (choice) {
+            case 1:
+                system.displayAvailableCars();
+                break;
+            case 2:
+                system.displayAvailableCars();
+                cout << "Enter car number to rent: ";
+                cin >> carIndex;
+                cout << "Enter renter's name: ";
+                cin.ignore();
+                getline(cin, renterName);
+                cout << "Enter number of days: ";
+                cin >> days;
+                system.rentCar(carIndex, renterName, days);
+                break;
+            case 3:
+                cout << "Enter car number to return: ";
+                cin >> carIndex;
+                system.returnCar(carIndex);
+                break;
+            case 4:
+                cout << "\nThank you for using the Car Rental System!\n";
+                return 0;
+            default:
+                cout << "Invalid choice! Please try again.\n";
+        }
+    }
+}
