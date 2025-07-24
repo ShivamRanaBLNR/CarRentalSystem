@@ -1,112 +1,153 @@
-//a Car Rental System implementation using Classes in c++
 #include <iostream>
-#include <vector>
-#include <iomanip> // For better formatting
+#include <iomanip>
+#include <cppconn/driver.h>
+#include <cppconn/connection.h>
+#include <cppconn/prepared_statement.h>
+#include <cppconn/resultset.h>
 
 using namespace std;
 
-class Car {
-public:
-    string brand, model;
-    double pricePerDay;
-    bool isAvailable;
-    string renterName;
-
-    Car(string brand, string model, double price)
-        : brand(brand), model(model), pricePerDay(price), isAvailable(true), renterName("") {}
-
-    void display(int index) const {
-        cout << index << ". " << brand << " " << model 
-             << " - ₹" << pricePerDay << "/day " 
-             << (isAvailable ? "(Available)" : "(Rented by " + renterName + ")") << endl;
-    }
-};
-
 class CarRentalSystem {
 private:
-    vector<Car> cars;
+    sql::Driver* driver;
+    sql::Connection* conn;
 
 public:
+    CarRentalSystem() {
+        driver = get_driver_instance();
+        conn = driver->connect("tcp://127.0.0.1:3306", "root", "your_password"); // Update credentials
+        conn->setSchema("CarRentalDB");
+    }
+
+    ~CarRentalSystem() {
+        delete conn;
+    }
+
     void addCar(string brand, string model, double price) {
-        cars.push_back(Car(brand, model, price));
+        sql::PreparedStatement* stmt = conn->prepareStatement(
+            "INSERT INTO cars (brand, model, price_per_day) VALUES (?, ?, ?)");
+        stmt->setString(1, brand);
+        stmt->setString(2, model);
+        stmt->setDouble(3, price);
+        stmt->executeUpdate();
+        delete stmt;
+        cout << "Car added successfully.\n";
     }
 
-    void displayAvailableCars() const {
+    void displayAvailableCars() {
+        sql::PreparedStatement* stmt = conn->prepareStatement(
+            "SELECT * FROM cars WHERE is_available = TRUE");
+        sql::ResultSet* res = stmt->executeQuery();
+
         cout << "\nAvailable Cars:\n";
-        for (size_t i = 0; i < cars.size(); i++) {
-            if (cars[i].isAvailable) cars[i].display(i + 1);
+        int index = 1;
+        while (res->next()) {
+            cout << index++ << ". " << res->getString("brand") << " "
+                 << res->getString("model") << " - ₹"
+                 << fixed << setprecision(2) << res->getDouble("price_per_day") << "/day\n";
         }
+
+        delete res;
+        delete stmt;
     }
 
-    void rentCar(int carIndex, string renterName, int days) {
-        if (carIndex >= 1 && carIndex <= cars.size() && cars[carIndex - 1].isAvailable) {
-            cars[carIndex - 1].isAvailable = false;
-            cars[carIndex - 1].renterName = renterName;
-            double totalPrice = cars[carIndex - 1].pricePerDay * days;
+    void rentCar(int carId, string renterName, int days) {
+        sql::PreparedStatement* stmt = conn->prepareStatement(
+            "SELECT * FROM cars WHERE id = ? AND is_available = TRUE");
+        stmt->setInt(1, carId);
+        sql::ResultSet* res = stmt->executeQuery();
+
+        if (res->next()) {
+            double price = res->getDouble("price_per_day");
+            double total = price * days;
+
+            sql::PreparedStatement* updateStmt = conn->prepareStatement(
+                "UPDATE cars SET is_available = FALSE, renter_name = ? WHERE id = ?");
+            updateStmt->setString(1, renterName);
+            updateStmt->setInt(2, carId);
+            updateStmt->executeUpdate();
+            delete updateStmt;
+
             cout << "\nCar Rented Successfully!";
             cout << "\nInvoice for " << renterName << ":\n"
-                 << "Car: " << cars[carIndex - 1].brand << " " << cars[carIndex - 1].model << endl
-                 << "Days: " << days << " | Rate: ₹" << cars[carIndex - 1].pricePerDay << "/day\n"
-                 << "Total Price: ₹" << fixed << setprecision(2) << totalPrice << endl;
+                 << "Car: " << res->getString("brand") << " " << res->getString("model") << "\n"
+                 << "Days: " << days << " | Rate: ₹" << price << "/day\n"
+                 << "Total Price: ₹" << fixed << setprecision(2) << total << endl;
         } else {
-            cout << "Invalid selection or car is already rented!\n";
+            cout << "Invalid ID or car already rented.\n";
         }
+
+        delete res;
+        delete stmt;
     }
 
-    void returnCar(int carIndex) {
-        if (carIndex >= 1 && carIndex <= cars.size() && !cars[carIndex - 1].isAvailable) {
-            cout << "\nCar Returned: " << cars[carIndex - 1].brand << " " << cars[carIndex - 1].model << " (Rented by " << cars[carIndex - 1].renterName << ")";
-            cars[carIndex - 1].isAvailable = true;
-            cars[carIndex - 1].renterName = "";
+    void returnCar(int carId) {
+        sql::PreparedStatement* stmt = conn->prepareStatement(
+            "SELECT * FROM cars WHERE id = ? AND is_available = FALSE");
+        stmt->setInt(1, carId);
+        sql::ResultSet* res = stmt->executeQuery();
+
+        if (res->next()) {
+            string renter = res->getString("renter_name");
+            sql::PreparedStatement* updateStmt = conn->prepareStatement(
+                "UPDATE cars SET is_available = TRUE, renter_name = NULL WHERE id = ?");
+            updateStmt->setInt(1, carId);
+            updateStmt->executeUpdate();
+            delete updateStmt;
+
+            cout << "\nCar Returned: " << res->getString("brand") << " " << res->getString("model")
+                 << " (Rented by " << renter << ")\n";
         } else {
-            cout << "Invalid selection or car was not rented!\n";
+            cout << "Invalid ID or car is not currently rented.\n";
         }
+
+        delete res;
+        delete stmt;
     }
 };
 
 int main() {
     CarRentalSystem system;
-    system.addCar("Toyota", "Corolla", 1500);
-    system.addCar("Honda", "Civic", 1700);
-    system.addCar("Ford", "Focus", 1400);
-
-    int choice, carIndex, days;
-    string renterName;
+    int choice, carId, days;
+    string brand, model, renterName;
+    double price;
 
     while (true) {
         cout << "\nCar Rental System Menu\n";
-        cout << "1. View Available Cars\n";
-        cout << "2. Rent a Car\n";
-        cout << "3. Return a Car\n";
-        cout << "4. Exit\n";
-        cout << "Enter your choice: ";
+        cout << "1. Add Car\n2. View Available Cars\n3. Rent Car\n4. Return Car\n5. Exit\n";
+        cout << "Enter choice: ";
         cin >> choice;
 
         switch (choice) {
             case 1:
-                system.displayAvailableCars();
+                cout << "Enter brand, model, and price/day: ";
+                cin >> brand >> model >> price;
+                system.addCar(brand, model, price);
                 break;
             case 2:
                 system.displayAvailableCars();
-                cout << "Enter car number to rent: ";
-                cin >> carIndex;
-                cout << "Enter renter's name: ";
-                cin.ignore();
-                getline(cin, renterName);
-                cout << "Enter number of days: ";
-                cin >> days;
-                system.rentCar(carIndex, renterName, days);
                 break;
             case 3:
-                cout << "Enter car number to return: ";
-                cin >> carIndex;
-                system.returnCar(carIndex);
+                system.displayAvailableCars();
+                cout << "Enter car ID to rent: ";
+                cin >> carId;
+                cout << "Enter renter name: ";
+                cin.ignore();
+                getline(cin, renterName);
+                cout << "Enter days: ";
+                cin >> days;
+                system.rentCar(carId, renterName, days);
                 break;
             case 4:
-                cout << "\nThank you for using the Car Rental System!\n";
+                cout << "Enter car ID to return: ";
+                cin >> carId;
+                system.returnCar(carId);
+                break;
+            case 5:
+                cout << "Thank you for using the Car Rental System!\n";
                 return 0;
             default:
-                cout << "Invalid choice! Please try again.\n";
+                cout << "Invalid choice. Try again.\n";
         }
     }
 }
