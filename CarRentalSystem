@@ -15,7 +15,7 @@ private:
 public:
     CarRentalSystem() {
         driver = get_driver_instance();
-        conn = driver->connect("tcp://127.0.0.1:3306", "root", "your_password"); // Update credentials
+        conn = driver->connect("tcp://127.0.0.1:3306", "root", "12345678"); 
         conn->setSchema("CarRentalDB");
     }
 
